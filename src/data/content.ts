@@ -1,4 +1,8 @@
 import { ProgramDomain, FieldProject, Partner, GalleryItem, BlogPost, FaqItem } from '../types';
+import heroImg from '../assets/images/hero_asofeder_women_1784664187658.jpg';
+import musoImg from '../assets/images/asofeder_muso_meeting_1784664199035.jpg';
+import treeImg from '../assets/images/asofeder_tree_nursery_1784664209449.jpg';
+import cleanWaterImg from '../assets/images/asofeder_clean_water_1784664221013.jpg';
 
 export const ORG_INFO = {
   name: 'ASOFEDER',
@@ -59,7 +63,7 @@ export const PROGRAM_DOMAINS: ProgramDomain[] = [
       'Gestion communautaire de l’eau d’irrigation villageoise'
     ],
     beneficiariesCount: '1,400+ Agricultrices',
-    image: '/images/hero_asofeder_women_1784664187658.jpg'
+    image: heroImg
   },
   {
     id: 'wash',
@@ -74,7 +78,7 @@ export const PROGRAM_DOMAINS: ProgramDomain[] = [
       'Distribution de kits d’hygiène menstruelle réutilisables'
     ],
     beneficiariesCount: '8,500+ Habitants',
-    image: '/images/asofeder_clean_water_1784664221013.jpg'
+    image: cleanWaterImg
   },
   {
     id: 'economie-solidaire',
@@ -89,7 +93,7 @@ export const PROGRAM_DOMAINS: ProgramDomain[] = [
       'Accompagnement à l’épargne prévoyance santé et éducation'
     ],
     beneficiariesCount: '2,100+ Membres MUSO',
-    image: '/images/asofeder_muso_meeting_1784664199035.jpg'
+    image: musoImg
   },
   {
     id: 'environnement',
@@ -104,7 +108,7 @@ export const PROGRAM_DOMAINS: ProgramDomain[] = [
       'Éducation environnementale dans les écoles rurales'
     ],
     beneficiariesCount: '25,000+ Arbres plantés',
-    image: '/images/asofeder_tree_nursery_1784664209449.jpg'
+    image: treeImg
   },
   {
     id: 'securite-alimentaire',
@@ -182,7 +186,7 @@ export const FIELD_PROJECTS: FieldProject[] = [
       { label: 'Fonds d\'épargne mobilisé', value: '2.5M HTG' },
       { label: 'Micro-projets financés', value: '310' }
     ],
-    image: '/images/asofeder_muso_meeting_1784664199035.jpg',
+    image: musoImg,
     details: 'Les commerçantes de Port-de-Paix et des sections rurales environnantes ont pu maintenir leurs activités économiques malgré les chocs d’inflation grâce au système d’épargne et de crédit solidaire de proximité.'
   },
   {
@@ -198,7 +202,7 @@ export const FIELD_PROJECTS: FieldProject[] = [
       { label: 'Femmes pépiniéristes', value: '80' },
       { label: 'Hectares reboisés', value: '120 ha' }
     ],
-    image: '/images/asofeder_tree_nursery_1784664209449.jpg',
+    image: treeImg,
     details: 'Production mixte de manguiers francique, cèdres, moringa et citronniers permettant à la fois la protection des sols et des revenus futurs grâce aux ventes de fruits.'
   },
   {
@@ -214,7 +218,7 @@ export const FIELD_PROJECTS: FieldProject[] = [
       { label: 'Latrines construites', value: '8' },
       { label: 'Élèves sensibilisés', value: '650' }
     ],
-    image: '/images/asofeder_clean_water_1784664221013.jpg',
+    image: cleanWaterImg,
     details: 'Ce projet a permis de réduire le temps de corvée d’eau des jeunes filles de plus de 2 heures par jour tout en diminuant considérablement les risques de maladies diarrhéiques.'
   },
   {

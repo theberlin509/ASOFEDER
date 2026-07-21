@@ -1,4 +1,5 @@
 import { BlogPost } from '../types';
+import defaultImg from '../assets/images/asofeder_tree_nursery_1784664209449.jpg';
 
 export const WP_API_URL = 'https://crm.asofeder.org/wp-json/wp/v2/posts?_embed';
 
@@ -26,7 +27,7 @@ function parseWpPosts(data: any[]): BlogPost[] {
     const imageUrl = featuredMedia?.source_url 
       || featuredMedia?.media_details?.sizes?.large?.source_url
       || featuredMedia?.media_details?.sizes?.full?.source_url
-      || '/images/asofeder_tree_nursery_1784664209449.jpg';
+      || defaultImg;
 
     const authorObj = item._embedded?.['author']?.[0];
     const authorName = authorObj?.name || 'ASOFEDER';

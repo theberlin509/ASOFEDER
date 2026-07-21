@@ -3,6 +3,9 @@ import { PageId, Language } from '../types';
 import { uiTranslations } from '../data/translations';
 import { ORG_INFO } from '../data/content';
 import { Calendar, Flag, Eye, Heart, CheckCircle2, ShieldCheck, Award, Users, ArrowRight, BookOpen, Coins, Sprout } from 'lucide-react';
+import heroImg from '../assets/images/hero_asofeder_women_1784664187658.jpg';
+import musoImg from '../assets/images/asofeder_muso_meeting_1784664199035.jpg';
+import treeImg from '../assets/images/asofeder_tree_nursery_1784664209449.jpg';
 
 interface AboutProps {
   onNavigate: (page: PageId) => void;
@@ -35,7 +38,7 @@ export const About: React.FC<AboutProps> = ({ onNavigate, currentLang }) => {
 
           <div className="relative h-[380px] sm:h-[460px] rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
             <img
-              src="/images/hero_asofeder_women_1784664187658.jpg"
+              src={heroImg}
               alt="Femmes ASOFEDER à Port-de-Paix"
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
@@ -151,7 +154,7 @@ export const About: React.FC<AboutProps> = ({ onNavigate, currentLang }) => {
             </div>
             <div className="rounded-2xl overflow-hidden h-48 shadow-md">
               <img
-                src="/images/asofeder_muso_meeting_1784664199035.jpg"
+                src={musoImg}
                 alt="Fondation ASOFEDER 2018"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
@@ -163,7 +166,7 @@ export const About: React.FC<AboutProps> = ({ onNavigate, currentLang }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-white p-6 sm:p-8 rounded-3xl border border-slate-200">
             <div className="rounded-2xl overflow-hidden h-48 shadow-md order-2 md:order-1">
               <img
-                src="/images/asofeder_tree_nursery_1784664209449.jpg"
+                src={treeImg}
                 alt="Premiers Programmes ASOFEDER"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
