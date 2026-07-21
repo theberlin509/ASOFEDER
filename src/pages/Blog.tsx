@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PageId, Language, BlogPost } from '../types';
 import { uiTranslations } from '../data/translations';
 import { FALLBACK_BLOG_POSTS } from '../data/content';
+import { fetchWordPressPosts } from '../services/wordpress';
 import { Calendar, Clock, ArrowRight, ArrowUpRight, User, Tag, ChevronRight, X, Heart, Bookmark, Share2, CheckCircle2 } from 'lucide-react';
 
 interface BlogProps {
@@ -16,37 +17,15 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
   const [activeCategory, setActiveCategory] = useState<string>('Tous');
 
   useEffect(() => {
-    const fetchWpPosts = async () => {
-      try {
-        const res = await fetch('https://asofeder.org/wp-json/wp/v2/posts?_embed&per_page=10');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const mapped: BlogPost[] = data.map((item: any) => {
-              const featuredImage = item._embedded?.['wp:featuredmedia']?.[0]?.source_url 
-                || '/src/assets/images/asofeder_tree_nursery_1784664209449.jpg';
-              const cleanExcerpt = item.excerpt?.rendered?.replace(/<[^>]+>/g, '') || '';
-              return {
-                id: item.id,
-                title: item.title?.rendered || 'Article ASOFEDER',
-                excerpt: cleanExcerpt.slice(0, 160) + '...',
-                content: item.content?.rendered || '',
-                imageUrl: featuredImage,
-                date: new Date(item.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
-                author: 'Équipe ASOFEDER',
-                category: 'Actualité',
-                link: item.link
-              };
-            });
-            setPosts(mapped);
-          }
-        }
-      } catch (err) {
-        console.warn('WordPress API unreachable, using fallback ASOFEDER posts:', err);
+    const loadPosts = async () => {
+      const fetched = await fetchWordPressPosts(12);
+      if (fetched && fetched.length > 0) {
+        setPosts(fetched);
       }
     };
-    fetchWpPosts();
+    loadPosts();
   }, []);
+
 
   const categories = ['Tous', 'Agriculture', 'Éducation', 'Santé', 'WASH', 'Micro-finance'];
 
@@ -92,6 +71,8 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
           </div>
         </div>
       </section>
+
+
 
       {/* FEATURED STORY (ASYMMETRIC LAYOUT) */}
       {featuredPost && activeCategory === 'Tous' && (

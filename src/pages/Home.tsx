@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PageId, Language, BlogPost } from '../types';
 import { uiTranslations } from '../data/translations';
 import { FIELD_PROJECTS, FALLBACK_BLOG_POSTS } from '../data/content';
+import { fetchWordPressPosts } from '../services/wordpress';
 import { 
   Heart, ArrowRight, ArrowUpRight, ChevronRight, Sprout, Droplets, Users, TreePine, 
   Utensils, GraduationCap, HeartPulse, Calendar
@@ -17,36 +18,13 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, currentLang }) => {
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>(FALLBACK_BLOG_POSTS.slice(0, 3));
 
   useEffect(() => {
-    const fetchWpPosts = async () => {
-      try {
-        const res = await fetch('https://asofeder.org/wp-json/wp/v2/posts?_embed&per_page=3');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const mapped: BlogPost[] = data.map((item: any) => {
-              const featuredImage = item._embedded?.['wp:featuredmedia']?.[0]?.source_url 
-                || '/src/assets/images/asofeder_tree_nursery_1784664209449.jpg';
-              const cleanExcerpt = item.excerpt?.rendered?.replace(/<[^>]+>/g, '') || '';
-              return {
-                id: item.id,
-                title: item.title?.rendered || 'Article ASOFEDER',
-                excerpt: cleanExcerpt.slice(0, 140) + '...',
-                content: item.content?.rendered || '',
-                imageUrl: featuredImage,
-                date: new Date(item.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }),
-                author: 'ASOFEDER',
-                category: 'Actualité',
-                link: item.link
-              };
-            });
-            setBlogPosts(mapped);
-          }
-        }
-      } catch (err) {
-        console.warn('WordPress API unreachable, using fallback ASOFEDER posts:', err);
+    const loadPosts = async () => {
+      const fetched = await fetchWordPressPosts(3);
+      if (fetched && fetched.length > 0) {
+        setBlogPosts(fetched);
       }
     };
-    fetchWpPosts();
+    loadPosts();
   }, []);
 
   return (
