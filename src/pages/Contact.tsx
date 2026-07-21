@@ -35,7 +35,7 @@ export const Contact: React.FC<ContactProps> = ({ onNavigate, currentLang }) => 
         <div className="relative rounded-[32px] overflow-hidden min-h-[320px] flex items-center bg-[#006b2d]">
           <div
             className="absolute inset-0 opacity-30 bg-center bg-cover bg-no-repeat"
-            style={{ backgroundImage: `url('/src/assets/images/hero_asofeder_women_1784664187658.jpg')` }}
+            style={{ backgroundImage: `url('/images/hero_asofeder_women_1784664187658.jpg')` }}
           />
           <div className="relative z-10 p-8 sm:p-14 max-w-2xl bg-gradient-to-r from-[#006b2d] via-[#006b2d]/90 to-transparent text-white space-y-4">
             <span className="bg-emerald-400/20 text-emerald-300 px-4 py-1 rounded-full font-heading font-bold text-xs uppercase tracking-wider inline-block">
@@ -217,7 +217,7 @@ export const Contact: React.FC<ContactProps> = ({ onNavigate, currentLang }) => 
         <div className="mt-12 h-96 w-full rounded-3xl overflow-hidden shadow-md relative border border-slate-200 bg-slate-900 flex items-center justify-center text-center p-6">
           <div
             className="absolute inset-0 bg-cover bg-center opacity-40"
-            style={{ backgroundImage: `url('/src/assets/images/asofeder_clean_water_1784664221013.jpg')` }}
+            style={{ backgroundImage: `url('/images/asofeder_clean_water_1784664221013.jpg')` }}
           />
           <div className="relative z-10 bg-white/95 backdrop-blur-md p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-2xl max-w-sm space-y-3 text-slate-900">
             <div className="w-12 h-12 bg-[#006b2d] text-white rounded-full flex items-center justify-center mx-auto shadow-md">

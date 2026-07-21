@@ -40,7 +40,7 @@ export const Partners: React.FC<PartnersProps> = ({ onNavigate, currentLang }) =
           <div className="md:w-2/5 relative">
             <div className="relative z-10 bg-white p-4 rounded-2xl shadow-lg border border-slate-200 rotate-2">
               <img
-                src="/src/assets/images/asofeder_muso_meeting_1784664199035.jpg"
+                src="/images/asofeder_muso_meeting_1784664199035.jpg"
                 alt="Partenariat ASOFEDER"
                 referrerPolicy="no-referrer"
                 className="w-full h-64 object-cover rounded-xl"
@@ -95,7 +95,7 @@ export const Partners: React.FC<PartnersProps> = ({ onNavigate, currentLang }) =
           {/* Card 1 */}
           <div className="md:col-span-2 relative overflow-hidden rounded-3xl bg-slate-900 text-white p-8 sm:p-10 flex flex-col justify-end min-h-[320px]">
             <img
-              src="/src/assets/images/asofeder_tree_nursery_1784664209449.jpg"
+              src="/images/asofeder_tree_nursery_1784664209449.jpg"
               alt="Partenariat Agricole"
               referrerPolicy="no-referrer"
               className="absolute inset-0 w-full h-full object-cover opacity-30"

@@ -35,7 +35,7 @@ export const About: React.FC<AboutProps> = ({ onNavigate, currentLang }) => {
 
           <div className="relative h-[380px] sm:h-[460px] rounded-3xl overflow-hidden shadow-2xl border-4 border-white">
             <img
-              src="/src/assets/images/hero_asofeder_women_1784664187658.jpg"
+              src="/images/hero_asofeder_women_1784664187658.jpg"
               alt="Femmes ASOFEDER à Port-de-Paix"
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover"
@@ -151,7 +151,7 @@ export const About: React.FC<AboutProps> = ({ onNavigate, currentLang }) => {
             </div>
             <div className="rounded-2xl overflow-hidden h-48 shadow-md">
               <img
-                src="/src/assets/images/asofeder_muso_meeting_1784664199035.jpg"
+                src="/images/asofeder_muso_meeting_1784664199035.jpg"
                 alt="Fondation ASOFEDER 2018"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
@@ -163,7 +163,7 @@ export const About: React.FC<AboutProps> = ({ onNavigate, currentLang }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-white p-6 sm:p-8 rounded-3xl border border-slate-200">
             <div className="rounded-2xl overflow-hidden h-48 shadow-md order-2 md:order-1">
               <img
-                src="/src/assets/images/asofeder_tree_nursery_1784664209449.jpg"
+                src="/images/asofeder_tree_nursery_1784664209449.jpg"
                 alt="Premiers Programmes ASOFEDER"
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"

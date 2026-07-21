@@ -35,7 +35,7 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, currentLang }) => {
         {/* Background Image with Gradient Overlay */}
         <div 
           className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-1000 scale-105"
-          style={{ backgroundImage: `url('/src/assets/images/hero_asofeder_women_1784664187658.jpg')` }}
+          style={{ backgroundImage: `url('/images/hero_asofeder_women_1784664187658.jpg')` }}
         >
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-slate-900/40" />
         </div>
@@ -177,13 +177,13 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, currentLang }) => {
 
           <div className="lg:col-span-5 grid grid-cols-2 gap-4">
             <img
-              src="/src/assets/images/asofeder_muso_meeting_1784664199035.jpg"
+              src="/images/asofeder_muso_meeting_1784664199035.jpg"
               alt="Femmes réunies ASOFEDER"
               referrerPolicy="no-referrer"
               className="rounded-2xl h-56 sm:h-64 w-full object-cover shadow-lg border border-slate-700"
             />
             <img
-              src="/src/assets/images/asofeder_tree_nursery_1784664209449.jpg"
+              src="/images/asofeder_tree_nursery_1784664209449.jpg"
               alt="Pépinière ASOFEDER"
               referrerPolicy="no-referrer"
               className="rounded-2xl h-56 sm:h-64 w-full object-cover shadow-lg border border-slate-700 mt-6"

@@ -2,12 +2,6 @@ import { BlogPost } from '../types';
 
 export const WP_API_URL = 'https://crm.asofeder.org/wp-json/wp/v2/posts?_embed';
 
-export interface WPFetchResult {
-  posts: BlogPost[];
-  isSgCaptchaBlocked: boolean;
-  error?: string;
-}
-
 function decodeHtmlEntities(text: string): string {
   if (!text) return '';
   try {
@@ -24,100 +18,88 @@ function stripHtmlTags(html: string): string {
   return html.replace(/<[^>]+>/g, '').trim();
 }
 
-export async function fetchWordPressPostsDetailed(limit: number = 10): Promise<WPFetchResult> {
-  const url = `${WP_API_URL}&per_page=${limit}`;
+function parseWpPosts(data: any[]): BlogPost[] {
+  if (!Array.isArray(data)) return [];
 
-  try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+  return data.map((item: any) => {
+    const featuredMedia = item._embedded?.['wp:featuredmedia']?.[0];
+    const imageUrl = featuredMedia?.source_url 
+      || featuredMedia?.media_details?.sizes?.large?.source_url
+      || featuredMedia?.media_details?.sizes?.full?.source_url
+      || '/images/asofeder_tree_nursery_1784664209449.jpg';
 
-    const contentType = res.headers.get('content-type') || '';
-    const text = await res.text();
+    const authorObj = item._embedded?.['author']?.[0];
+    const authorName = authorObj?.name || 'ASOFEDER';
 
-    // Check if SiteGround captcha or HTML protection was returned instead of JSON
-    if (text.includes('sgcaptcha') || text.includes('/.well-known/sgcaptcha') || contentType.includes('text/html')) {
-      console.warn('SiteGround Anti-Bot (sgcaptcha) bloque l\'accès REST API sur crm.asofeder.org');
-      return {
-        posts: [],
-        isSgCaptchaBlocked: true,
-        error: 'SG_CAPTCHA_BLOCKED'
-      };
-    }
+    const terms = item._embedded?.['wp:term']?.[0];
+    const categoryName = terms && terms.length > 0 ? decodeHtmlEntities(terms[0].name) : 'Actualité';
 
-    let data: any;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      return {
-        posts: [],
-        isSgCaptchaBlocked: true,
-        error: 'INVALID_JSON'
-      };
-    }
+    const rawTitle = item.title?.rendered || 'Article ASOFEDER';
+    const cleanTitle = decodeHtmlEntities(rawTitle);
 
-    if (!Array.isArray(data)) {
-      return { posts: [], isSgCaptchaBlocked: false };
-    }
+    const rawExcerpt = item.excerpt?.rendered || '';
+    const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(rawExcerpt));
 
-    const posts: BlogPost[] = data.map((item: any) => {
-      const featuredMedia = item._embedded?.['wp:featuredmedia']?.[0];
-      const imageUrl = featuredMedia?.source_url 
-        || featuredMedia?.media_details?.sizes?.large?.source_url
-        || featuredMedia?.media_details?.sizes?.full?.source_url
-        || '/src/assets/images/asofeder_tree_nursery_1784664209449.jpg';
-
-      const authorObj = item._embedded?.['author']?.[0];
-      const authorName = authorObj?.name || 'ASOFEDER';
-
-      const terms = item._embedded?.['wp:term']?.[0];
-      const categoryName = terms && terms.length > 0 ? decodeHtmlEntities(terms[0].name) : 'Actualité';
-
-      const rawTitle = item.title?.rendered || 'Article ASOFEDER';
-      const cleanTitle = decodeHtmlEntities(rawTitle);
-
-      const rawExcerpt = item.excerpt?.rendered || '';
-      const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(rawExcerpt));
-
-      const postDate = item.date ? new Date(item.date) : new Date();
-      const formattedDate = postDate.toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-
-      return {
-        id: item.id,
-        title: cleanTitle,
-        excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Lire la suite de cet article...',
-        content: item.content?.rendered || '',
-        imageUrl,
-        date: formattedDate,
-        author: authorName,
-        category: categoryName,
-        link: item.link
-      };
+    const postDate = item.date ? new Date(item.date) : new Date();
+    const formattedDate = postDate.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
     });
 
     return {
-      posts,
-      isSgCaptchaBlocked: false
+      id: item.id,
+      title: cleanTitle,
+      excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Lire la suite de cet article...',
+      content: item.content?.rendered || '',
+      imageUrl,
+      date: formattedDate,
+      author: authorName,
+      category: categoryName,
+      link: item.link
     };
-  } catch (error: any) {
-    console.warn('Erreur de réseau ou CORS lors de la connexion à WordPress:', error);
-    return {
-      posts: [],
-      isSgCaptchaBlocked: true,
-      error: error?.message || 'NETWORK_ERROR'
-    };
-  }
+  });
 }
 
 export async function fetchWordPressPosts(limit: number = 10): Promise<BlogPost[]> {
-  const result = await fetchWordPressPostsDetailed(limit);
-  return result.posts;
+  const targetUrl = `${WP_API_URL}&per_page=${limit}`;
+
+  // List of strategies to fetch: direct, CORS proxy 1, CORS proxy 2
+  const fetchUrls = [
+    targetUrl,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+  ];
+
+  for (const url of fetchUrls) {
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+
+      if (!res.ok) continue;
+
+      const contentType = res.headers.get('content-type') || '';
+      const text = await res.text();
+
+      // Skip HTML or Captcha responses
+      if (text.includes('sgcaptcha') || text.includes('<!DOCTYPE html') || contentType.includes('text/html')) {
+        continue;
+      }
+
+      const data = JSON.parse(text);
+      if (Array.isArray(data) && data.length > 0) {
+        return parseWpPosts(data);
+      }
+    } catch (err) {
+      console.warn(`Failed fetching WP posts from ${url}:`, err);
+    }
+  }
+
+  return [];
 }
+
 
