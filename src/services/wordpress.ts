@@ -9,8 +9,6 @@ export const WP_API_URL = 'https://crm.asofeder.org/wp-json/wp/v2/posts?_embed';
 
 const FALLBACK_IMAGES = [treeImg, musoImg, cleanWaterImg, heroImg];
 
-let cachedPostsMemory: BlogPost[] | null = null;
-
 function decodeHtmlEntities(text: string): string {
   if (!text) return '';
   try {
@@ -53,29 +51,65 @@ function mapCategory(termName: string, titleAndExcerpt: string, index: number): 
     return 'Éducation';
   }
 
-  // Fallback round-robin
   const defaults = ['Agriculture', 'Environnement', 'Micro-finance', 'WASH', 'Éducation'];
   return defaults[index % defaults.length];
+}
+
+function extractImageUrl(item: any, index: number): string {
+  const wpDomain = 'https://crm.asofeder.org';
+
+  // 1. Check all embedded media sizes and fields from WordPress REST API
+  const featuredMedia = item._embedded?.['wp:featuredmedia']?.[0];
+  let urlCandidate =
+    featuredMedia?.source_url ||
+    featuredMedia?.media_details?.sizes?.full?.source_url ||
+    featuredMedia?.media_details?.sizes?.large?.source_url ||
+    featuredMedia?.media_details?.sizes?.medium_large?.source_url ||
+    featuredMedia?.media_details?.sizes?.medium?.source_url ||
+    featuredMedia?.media_details?.sizes?.thumbnail?.source_url ||
+    featuredMedia?.guid?.rendered ||
+    item.featured_media_src_url ||
+    item.jetpack_featured_media_url ||
+    item.better_featured_image?.source_url ||
+    item.featured_image_url;
+
+  // 2. If no featured media found, search for first <img> tag in post content or excerpt
+  if (!urlCandidate || typeof urlCandidate !== 'string') {
+    const combinedHtml = (item.content?.rendered || '') + ' ' + (item.excerpt?.rendered || '');
+    const imgMatch = combinedHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+    if (imgMatch && imgMatch[1]) {
+      urlCandidate = imgMatch[1];
+    }
+  }
+
+  // 3. Process and sanitize candidate URL
+  if (urlCandidate && typeof urlCandidate === 'string') {
+    let cleanUrl = urlCandidate.trim().replace(/&amp;/g, '&');
+
+    // Fix relative WP URLs
+    if (cleanUrl.startsWith('/wp-content')) {
+      cleanUrl = `${wpDomain}${cleanUrl}`;
+    }
+
+    // Upgrade HTTP to HTTPS
+    if (cleanUrl.startsWith('http:')) {
+      cleanUrl = cleanUrl.replace('http:', 'https:');
+    }
+
+    if (cleanUrl.startsWith('https://') || cleanUrl.startsWith('data:image')) {
+      return cleanUrl;
+    }
+  }
+
+  // 4. Fallback asset only if no image exists anywhere in WP post
+  return FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
 }
 
 function parseWpPosts(data: any[]): BlogPost[] {
   if (!Array.isArray(data)) return [];
 
   return data.map((item: any, index: number) => {
-    const featuredMedia = item._embedded?.['wp:featuredmedia']?.[0];
-    let imageUrl = featuredMedia?.source_url 
-      || featuredMedia?.media_details?.sizes?.large?.source_url
-      || featuredMedia?.media_details?.sizes?.full?.source_url;
-
-    // Convert http to https if applicable
-    if (imageUrl && imageUrl.startsWith('http:')) {
-      imageUrl = imageUrl.replace('http:', 'https:');
-    }
-
-    // If no image or invalid media URL, assign a rich local fallback asset
-    if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.length < 10) {
-      imageUrl = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
-    }
+    const imageUrl = extractImageUrl(item, index);
 
     const authorObj = item._embedded?.['author']?.[0];
     const authorName = authorObj?.name || 'Direction ASOFEDER';
@@ -100,7 +134,7 @@ function parseWpPosts(data: any[]): BlogPost[] {
     return {
       id: item.id,
       title: cleanTitle,
-      excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur le terrain...',
+      excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur the terrain...',
       content: item.content?.rendered || '',
       imageUrl,
       date: formattedDate,
@@ -111,13 +145,16 @@ function parseWpPosts(data: any[]): BlogPost[] {
   });
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number = 3000): Promise<Response> {
+async function fetchWithTimeout(url: string, timeoutMs: number = 4000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
       method: 'GET',
-      headers: { 'Accept': 'application/json' },
+      headers: { 
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache, no-store'
+      },
       signal: controller.signal
     });
     clearTimeout(id);
@@ -129,36 +166,17 @@ async function fetchWithTimeout(url: string, timeoutMs: number = 3000): Promise<
 }
 
 export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[]> {
-  // 1. Check in-memory cache
-  if (cachedPostsMemory && cachedPostsMemory.length > 0) {
-    return limit ? cachedPostsMemory.slice(0, limit) : cachedPostsMemory;
-  }
-
-  // 2. Check SessionStorage cache
-  try {
-    const sessionData = sessionStorage.getItem('asofeder_wp_posts');
-    if (sessionData) {
-      const parsed = JSON.parse(sessionData);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        cachedPostsMemory = parsed;
-        return limit ? parsed.slice(0, limit) : parsed;
-      }
-    }
-  } catch {
-    // Ignore sessionStorage errors
-  }
-
-  const targetUrl = `${WP_API_URL}&per_page=${limit}`;
+  const timestamp = Date.now();
+  const targetUrl = `${WP_API_URL}&per_page=${limit}&_t=${timestamp}`;
 
   const fetchUrls = [
     targetUrl,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-    `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
   ];
 
   for (const url of fetchUrls) {
     try {
-      const res = await fetchWithTimeout(url, 3200);
+      const res = await fetchWithTimeout(url, 4000);
       if (!res.ok) continue;
 
       const contentType = res.headers.get('content-type') || '';
@@ -169,25 +187,13 @@ export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[
       }
 
       const data = JSON.parse(text);
-      if (Array.isArray(data) && data.length > 0) {
-        const parsedPosts = parseWpPosts(data);
-        if (parsedPosts.length > 0) {
-          cachedPostsMemory = parsedPosts;
-          try {
-            sessionStorage.setItem('asofeder_wp_posts', JSON.stringify(parsedPosts));
-          } catch {
-            // ignore
-          }
-          return parsedPosts;
-        }
+      if (Array.isArray(data)) {
+        return parseWpPosts(data);
       }
     } catch (err) {
-      console.warn(`Attempt failed for ${url}:`, err);
+      console.warn(`Fetch attempt failed for ${url}:`, err);
     }
   }
 
-  // Fallback to local curated posts if network/proxy is unavailable
   return FALLBACK_BLOG_POSTS;
 }
-
-
