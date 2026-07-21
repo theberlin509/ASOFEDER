@@ -3,7 +3,8 @@ import { PageId, Language, BlogPost } from '../types';
 import { uiTranslations } from '../data/translations';
 import { FALLBACK_BLOG_POSTS } from '../data/content';
 import { fetchWordPressPosts } from '../services/wordpress';
-import { Calendar, Clock, ArrowRight, ArrowUpRight, User, Tag, ChevronRight, X, Heart, Bookmark, Share2, CheckCircle2 } from 'lucide-react';
+import treeImg from '../assets/images/asofeder_tree_nursery_1784664209449.jpg';
+import { Calendar, Clock, ArrowRight, ArrowUpRight, User, Tag, ChevronRight, X, Heart, Bookmark, Share2, CheckCircle2, Newspaper } from 'lucide-react';
 
 interface BlogProps {
   onNavigate: (page: PageId) => void;
@@ -17,17 +18,25 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
   const [activeCategory, setActiveCategory] = useState<string>('Tous');
 
   useEffect(() => {
+    let isMounted = true;
     const loadPosts = async () => {
       const fetched = await fetchWordPressPosts(12);
-      if (fetched && fetched.length > 0) {
+      if (isMounted && fetched && fetched.length > 0) {
         setPosts(fetched);
       }
     };
     loadPosts();
+    return () => { isMounted = false; };
   }, []);
 
+  const handleImgError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const target = e.currentTarget;
+    if (target.src !== treeImg) {
+      target.src = treeImg;
+    }
+  };
 
-  const categories = ['Tous', 'Agriculture', 'Éducation', 'Santé', 'WASH', 'Micro-finance'];
+  const categories = ['Tous', 'Agriculture', 'Économie Solidaire', 'Environnement', 'WASH', 'Éducation', 'Micro-finance'];
 
   const filteredPosts = activeCategory === 'Tous'
     ? posts
@@ -49,7 +58,7 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
               Histoires du Terrain
             </h1>
             <p className="text-slate-600 text-xs sm:text-base leading-relaxed">
-              Découvrez comment nos initiatives transforment la vie des femmes rurales et de leurs familles à Port-de-Paix et au-delà.
+              Découvrez comment nos initiatives transforment la vie des femmes rurales et de leurs familles à Port-de-Paix et dans le Nord-Ouest.
             </p>
           </div>
 
@@ -72,8 +81,6 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
         </div>
       </section>
 
-
-
       {/* FEATURED STORY (ASYMMETRIC LAYOUT) */}
       {featuredPost && activeCategory === 'Tous' && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -82,6 +89,7 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
               <img
                 src={featuredPost.imageUrl}
                 alt={featuredPost.title}
+                onError={handleImgError}
                 referrerPolicy="no-referrer"
                 className="w-full h-full object-cover"
               />
@@ -119,55 +127,74 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
 
       {/* ARTICLES BENTO GRID */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredPosts.map((post) => (
-            <article
-              key={post.id}
-              onClick={() => setSelectedPost(post)}
-              className="cursor-pointer bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs hover:shadow-md transition flex flex-col justify-between group"
+        {filteredPosts.length === 0 ? (
+          <div className="text-center py-16 px-6 bg-slate-50 rounded-3xl border border-slate-200/80 space-y-4 max-w-xl mx-auto">
+            <Newspaper className="h-10 w-10 text-[#006b2d] mx-auto opacity-80" />
+            <h3 className="font-heading font-bold text-lg text-slate-900">
+              Aucun article pour la catégorie "{activeCategory}"
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600">
+              Découvrez nos articles généraux ou réinitialisez le filtre pour voir toutes les actualités d'ASOFEDER.
+            </p>
+            <button
+              onClick={() => setActiveCategory('Tous')}
+              className="bg-[#006b2d] text-white px-6 py-2.5 rounded-xl text-xs font-bold hover:bg-[#004d1f] transition shadow-xs"
             >
-              <div>
-                <div className="h-52 relative overflow-hidden">
-                  <img
-                    src={post.imageUrl}
-                    alt={post.title}
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                  />
-                  <span className="absolute top-3 left-3 bg-[#006b2d] text-white text-[10px] font-bold px-2 py-1 rounded-md">
-                    {post.category}
-                  </span>
-                </div>
-
-                <div className="p-6 space-y-3">
-                  <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
-                    <Calendar className="h-3.5 w-3.5" />
-                    <span>{post.date}</span>
+              Voir tous les articles
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredPosts.map((post) => (
+              <article
+                key={post.id}
+                onClick={() => setSelectedPost(post)}
+                className="cursor-pointer bg-white rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs hover:shadow-md transition flex flex-col justify-between group"
+              >
+                <div>
+                  <div className="h-52 relative overflow-hidden bg-slate-100">
+                    <img
+                      src={post.imageUrl}
+                      alt={post.title}
+                      onError={handleImgError}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
+                    />
+                    <span className="absolute top-3 left-3 bg-[#006b2d] text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-xs">
+                      {post.category}
+                    </span>
                   </div>
 
-                  <h3 className="font-heading font-bold text-base text-slate-900 group-hover:text-[#006b2d] transition line-clamp-2">
-                    {post.title}
-                  </h3>
+                  <div className="p-6 space-y-3">
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>{post.date}</span>
+                    </div>
 
-                  <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
-                    {post.excerpt}
-                  </p>
+                    <h3 className="font-heading font-bold text-base text-slate-900 group-hover:text-[#006b2d] transition line-clamp-2">
+                      {post.title}
+                    </h3>
+
+                    <p className="text-xs text-slate-600 line-clamp-3 leading-relaxed">
+                      {post.excerpt}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="px-6 pb-6 pt-0 border-t border-slate-100 flex items-center justify-between mt-4">
-                <span className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
-                  <User className="h-3.5 w-3.5 text-[#006b2d]" />
-                  <span>{post.author}</span>
-                </span>
-                <span className="text-xs font-bold text-[#1e3aa1] flex items-center gap-1 group-hover:underline">
-                  <span>Lire</span>
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </span>
-              </div>
-            </article>
-          ))}
-        </div>
+                <div className="px-6 pb-6 pt-0 border-t border-slate-100 flex items-center justify-between mt-4">
+                  <span className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
+                    <User className="h-3.5 w-3.5 text-[#006b2d]" />
+                    <span>{post.author}</span>
+                  </span>
+                  <span className="text-xs font-bold text-[#1e3aa1] flex items-center gap-1 group-hover:underline">
+                    <span>Lire</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* DETAILED ARTICLE READER MODAL */}
@@ -202,6 +229,7 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
             <img
               src={selectedPost.imageUrl}
               alt={selectedPost.title}
+              onError={handleImgError}
               referrerPolicy="no-referrer"
               className="w-full h-72 object-cover rounded-2xl border border-slate-200"
             />

@@ -21,13 +21,15 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, currentLang }) => {
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>(FALLBACK_BLOG_POSTS.slice(0, 3));
 
   useEffect(() => {
+    let isMounted = true;
     const loadPosts = async () => {
       const fetched = await fetchWordPressPosts(3);
-      if (fetched && fetched.length > 0) {
-        setBlogPosts(fetched);
+      if (isMounted && fetched && fetched.length > 0) {
+        setBlogPosts(fetched.slice(0, 3));
       }
     };
     loadPosts();
+    return () => { isMounted = false; };
   }, []);
 
   return (
@@ -226,6 +228,12 @@ export const Home: React.FC<HomeProps> = ({ onNavigate, currentLang }) => {
                     <img
                       src={post.imageUrl}
                       alt={post.title}
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (target.src !== treeImg) {
+                          target.src = treeImg;
+                        }
+                      }}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                     />
