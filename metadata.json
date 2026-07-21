@@ -1,0 +1,6 @@
+{
+  "name": "ASOFEDER - Femmes Engagées pour le Développement Rural",
+  "description": "Site officiel de l'Association Sociale des Femmes Engagées pour le Développement Rural à Port-de-Paix, Nord-Ouest, Haïti.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
