@@ -7,6 +7,7 @@ import { FALLBACK_BLOG_POSTS } from '../data/content';
 
 export const WP_API_URL = 'https://crm.asofeder.org/wp-json/wp/v2/posts?_embed';
 export const GRAPHQL_API_URL = 'https://crm.asofeder.org/graphql';
+export const WP_RSS_FEED_URL = 'https://crm.asofeder.org/feed/';
 
 const FALLBACK_IMAGES = [treeImg, musoImg, cleanWaterImg, heroImg];
 
@@ -17,7 +18,7 @@ function decodeHtmlEntities(text: string): string {
     const doc = parser.parseFromString(text, 'text/html');
     return doc.body.textContent || text;
   } catch {
-    return text.replace(/&amp;/g, '&').replace(/&#8211;/g, '-').replace(/&rsquo;/g, "'");
+    return text.replace(/&amp;/g, '&').replace(/&#8211;/g, '-').replace(/&rsquo;/g, "'").replace(/&quot;/g, '"');
   }
 }
 
@@ -34,7 +35,6 @@ function mapCategory(termName: string, titleAndExcerpt: string, index: number): 
     return cleanTerm;
   }
 
-  // Infer category from title/content
   const text = titleAndExcerpt.toLowerCase();
   if (text.includes('eau') || text.includes('wash') || text.includes('hygiène') || text.includes('assainissement')) {
     return 'WASH';
@@ -57,64 +57,36 @@ function mapCategory(termName: string, titleAndExcerpt: string, index: number): 
 }
 
 /**
- * Attempt fetching via WPGraphQL first if installed on crm.asofeder.org
+ * Fetch articles via WordPress RSS Feed (bypasses SiteGround Anti-Bot blocking)
  */
-async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null> {
-  const query = `
-    query GetPosts($first: Int) {
-      posts(first: $first, where: { orderby: { field: DATE, order: DESC } }) {
-        nodes {
-          databaseId
-          id
-          title
-          excerpt
-          content
-          date
-          link
-          author {
-            node {
-              name
-            }
-          }
-          categories {
-            nodes {
-              name
-            }
-          }
-          featuredImage {
-            node {
-              sourceUrl
-            }
-          }
-        }
-      }
-    }
-  `;
+async function fetchRssFeedPosts(limit: number = 12): Promise<BlogPost[] | null> {
+  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(WP_RSS_FEED_URL)}&_t=${Date.now()}`;
 
   try {
-    const res = await fetch(GRAPHQL_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        query,
-        variables: { first: limit }
-      })
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(apiUrl, { signal: controller.signal });
+    clearTimeout(timer);
 
     if (!res.ok) return null;
     const json = await res.json();
-    if (!json.data?.posts?.nodes) return null;
+    if (json.status !== 'ok' || !Array.isArray(json.items) || json.items.length === 0) {
+      return null;
+    }
 
-    const nodes = json.data.posts.nodes;
-    return nodes.map((node: any, index: number) => {
-      let imageUrl = node.featuredImage?.node?.sourceUrl;
+    const items = json.items.slice(0, limit);
+    return items.map((item: any, index: number) => {
+      const rawTitle = item.title || 'Article ASOFEDER';
+      const cleanTitle = decodeHtmlEntities(rawTitle);
 
-      if (!imageUrl || typeof imageUrl !== 'string') {
-        const combinedHtml = (node.content || '') + ' ' + (node.excerpt || '');
-        const imgMatch = combinedHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+      const rawContent = item.content || item.description || '';
+      const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(item.description || rawContent));
+
+      // Extract image from thumbnail, enclosure or content body
+      let imageUrl = item.thumbnail || item.enclosure?.link;
+      if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.length < 5) {
+        const imgMatch = rawContent.match(/<img[^>]+src=["']([^"']+)["']/i);
         if (imgMatch && imgMatch[1]) {
           imageUrl = imgMatch[1];
         }
@@ -131,16 +103,10 @@ async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null>
         imageUrl = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
       }
 
-      const rawTitle = node.title || 'Article ASOFEDER';
-      const cleanTitle = decodeHtmlEntities(rawTitle);
-      const rawExcerpt = node.excerpt || '';
-      const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(rawExcerpt));
+      const termName = item.categories && item.categories.length > 0 ? item.categories[0] : '';
+      const categoryName = mapCategory(termName, cleanTitle + ' ' + cleanExcerpt, index);
 
-      const categoryName = node.categories?.nodes?.[0]?.name 
-        ? decodeHtmlEntities(node.categories.nodes[0].name)
-        : mapCategory('', cleanTitle + ' ' + cleanExcerpt, index);
-
-      const postDate = node.date ? new Date(node.date) : new Date();
+      const postDate = item.pubDate ? new Date(item.pubDate) : new Date();
       const formattedDate = postDate.toLocaleDateString('fr-FR', {
         day: 'numeric',
         month: 'long',
@@ -148,15 +114,15 @@ async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null>
       });
 
       return {
-        id: node.databaseId || node.id,
+        id: item.guid || item.link || String(index),
         title: cleanTitle,
         excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur le terrain...',
-        content: node.content || '',
+        content: item.content || item.description || '',
         imageUrl,
         date: formattedDate,
-        author: node.author?.node?.name || 'Direction ASOFEDER',
+        author: item.author || 'Direction ASOFEDER',
         category: categoryName,
-        link: node.link
+        link: item.link
       };
     });
   } catch {
@@ -248,62 +214,176 @@ function parseWpPosts(data: any[]): BlogPost[] {
   });
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number = 4000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
+/**
+ * Fetch via WordPress REST API
+ */
+async function fetchRestApiPosts(limit: number = 12): Promise<BlogPost[] | null> {
+  const timestamp = Date.now();
+  const directUrl = `${WP_API_URL}&per_page=${limit}&_t=${timestamp}`;
+
+  const urlsToTry = [
+    directUrl,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`
+  ];
+
+  for (const url of urlsToTry) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+
+      if (!res.ok) continue;
+
+      const text = await res.text();
+      if (text.includes('sgcaptcha') || text.includes('<!DOCTYPE html')) {
+        continue;
+      }
+
+      const data = JSON.parse(text);
+      if (Array.isArray(data) && data.length > 0) {
+        return parseWpPosts(data);
+      }
+    } catch {
+      // Ignore and continue
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Fetch via WPGraphQL
+ */
+async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null> {
+  const query = `
+    query GetPosts($first: Int) {
+      posts(first: $first, where: { orderby: { field: DATE, order: DESC } }) {
+        nodes {
+          databaseId
+          id
+          title
+          excerpt
+          content
+          date
+          link
+          author {
+            node {
+              name
+            }
+          }
+          categories {
+            nodes {
+              name
+            }
+          }
+          featuredImage {
+            node {
+              sourceUrl
+            }
+          }
+        }
+      }
+    }
+  `;
+
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 
-        'Accept': 'application/json',
-        'Cache-Control': 'no-cache, no-store'
-      },
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+
+    const res = await fetch(GRAPHQL_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query,
+        variables: { first: limit }
+      }),
       signal: controller.signal
     });
-    clearTimeout(id);
-    return response;
-  } catch (err) {
-    clearTimeout(id);
-    throw err;
+    clearTimeout(timer);
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json.data?.posts?.nodes) return null;
+
+    const nodes = json.data.posts.nodes;
+    if (nodes.length === 0) return null;
+
+    return nodes.map((node: any, index: number) => {
+      let imageUrl = node.featuredImage?.node?.sourceUrl;
+
+      if (!imageUrl || typeof imageUrl !== 'string') {
+        const combinedHtml = (node.content || '') + ' ' + (node.excerpt || '');
+        const imgMatch = combinedHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch && imgMatch[1]) {
+          imageUrl = imgMatch[1];
+        }
+      }
+
+      if (imageUrl && imageUrl.startsWith('/wp-content')) {
+        imageUrl = `https://crm.asofeder.org${imageUrl}`;
+      }
+      if (imageUrl && imageUrl.startsWith('http:')) {
+        imageUrl = imageUrl.replace('http:', 'https:');
+      }
+
+      if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.length < 10) {
+        imageUrl = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+      }
+
+      const rawTitle = node.title || 'Article ASOFEDER';
+      const cleanTitle = decodeHtmlEntities(rawTitle);
+      const rawExcerpt = node.excerpt || '';
+      const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(rawExcerpt));
+
+      const categoryName = node.categories?.nodes?.[0]?.name 
+        ? decodeHtmlEntities(node.categories.nodes[0].name)
+        : mapCategory('', cleanTitle + ' ' + cleanExcerpt, index);
+
+      const postDate = node.date ? new Date(node.date) : new Date();
+      const formattedDate = postDate.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+
+      return {
+        id: node.databaseId || node.id,
+        title: cleanTitle,
+        excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur le terrain...',
+        content: node.content || '',
+        imageUrl,
+        date: formattedDate,
+        author: node.author?.node?.name || 'Direction ASOFEDER',
+        category: categoryName,
+        link: node.link
+      };
+    });
+  } catch {
+    return null;
   }
 }
 
 export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[]> {
-  // 1. First try WPGraphQL endpoint
+  // 1. First try RSS Feed via rss2json (Bypasses SiteGround Anti-Bot completely)
+  const rssPosts = await fetchRssFeedPosts(limit);
+  if (rssPosts && rssPosts.length > 0) {
+    return rssPosts;
+  }
+
+  // 2. Try REST API
+  const restPosts = await fetchRestApiPosts(limit);
+  if (restPosts && restPosts.length > 0) {
+    return restPosts;
+  }
+
+  // 3. Try WPGraphQL
   const gqlPosts = await fetchGraphQLPosts(limit);
   if (gqlPosts && gqlPosts.length > 0) {
     return gqlPosts;
   }
 
-  // 2. Otherwise try REST API with CORS proxy
-  const timestamp = Date.now();
-  const targetUrl = `${WP_API_URL}&per_page=${limit}&_t=${timestamp}`;
-
-  const fetchUrls = [
-    targetUrl,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`
-  ];
-
-  for (const url of fetchUrls) {
-    try {
-      const res = await fetchWithTimeout(url, 4000);
-      if (!res.ok) continue;
-
-      const contentType = res.headers.get('content-type') || '';
-      const text = await res.text();
-
-      if (text.includes('sgcaptcha') || text.includes('<!DOCTYPE html') || contentType.includes('text/html')) {
-        continue;
-      }
-
-      const data = JSON.parse(text);
-      if (Array.isArray(data)) {
-        return parseWpPosts(data);
-      }
-    } catch {
-      // Continue to next
-    }
-  }
-
+  // 4. Fallback to local default posts if all external methods fail
   return FALLBACK_BLOG_POSTS;
 }
