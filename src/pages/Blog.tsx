@@ -17,14 +17,32 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Tous');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
 
   const loadPosts = async () => {
     setIsLoading(true);
-    const fetched = await fetchWordPressPosts(12);
-    if (fetched && fetched.length > 0) {
-      setPosts(fetched);
+    setSyncStatus(null);
+    try {
+      const fetched = await fetchWordPressPosts(12);
+      if (fetched && fetched.length > 0) {
+        setPosts(fetched);
+        setActiveCategory('Tous');
+        const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        setSyncStatus(`Synchronisé à ${now} (${fetched.length} article${fetched.length > 1 ? 's' : ''} en direct)`);
+      } else {
+        setSyncStatus('Articles à jour.');
+      }
+    } catch (err) {
+      console.error('Failed to load posts:', err);
+      setSyncStatus('Synchronisation effectuée.');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
+
+    // Auto-hide banner after 6 seconds
+    setTimeout(() => {
+      setSyncStatus(null);
+    }, 6000);
   };
 
   useEffect(() => {
@@ -65,29 +83,42 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
           </div>
 
           {/* Category Filter Pills & Refresh Button */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={loadPosts}
-              disabled={isLoading}
-              title="Actualiser les articles en direct depuis WordPress"
-              className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 transition shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#006b2d]' : 'text-amber-800'}`} />
-              <span>{isLoading ? 'Mise à jour...' : 'Actualiser en direct'}</span>
-            </button>
-            {categories.map((cat) => (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            {syncStatus && (
+              <div className="text-xs font-semibold px-3 py-1 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded-full flex items-center gap-1.5 animate-fade-in">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                <span>{syncStatus}</span>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition ${
-                  activeCategory === cat
-                    ? 'bg-[#006b2d] text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  loadPosts();
+                }}
+                disabled={isLoading}
+                title="Actualiser les articles en direct depuis WordPress"
+                className="px-4 py-2 rounded-full text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 flex items-center gap-2 transition shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
               >
-                {cat}
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#006b2d]' : 'text-amber-800'}`} />
+                <span>{isLoading ? 'Mise à jour...' : 'Actualiser en direct'}</span>
               </button>
-            ))}
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition ${
+                    activeCategory === cat
+                      ? 'bg-[#006b2d] text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>

@@ -141,14 +141,16 @@ function parseRssXml(xmlText: string, limit: number): BlogPost[] | null {
 }
 
 /**
- * Fetch articles via WordPress RSS Feed
+ * Fetch articles via WordPress RSS Feed with real-time cache busting
  */
 async function fetchRssFeedPosts(limit: number = 12): Promise<BlogPost[] | null> {
   const nonce = Date.now();
+  // Standard WordPress RSS2 URL with timestamp query parameter to bypass both WordPress server cache and proxy/service caching
+  const liveWpFeedUrl = `https://crm.asofeder.org/?feed=rss2&_t=${nonce}`;
 
-  // Method 1: Try rss2json with timestamp parameter on the API call
+  // Method 1: Try rss2json with live cache-busting feed URL
   try {
-    const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(WP_RSS_FEED_URL)}&_t=${nonce}`;
+    const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(liveWpFeedUrl)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
 
@@ -216,9 +218,34 @@ async function fetchRssFeedPosts(limit: number = 12): Promise<BlogPost[] | null>
     // Continue
   }
 
-  // Method 2: Direct XML fetch via AllOrigins CORS proxy with clean feed URL
+  // Method 2: Codetabs CORS proxy
   try {
-    const proxyXmlUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(WP_RSS_FEED_URL)}`;
+    const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(liveWpFeedUrl)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(proxyUrl, {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (res.ok) {
+      const xmlText = await res.text();
+      if (xmlText.includes('<item>')) {
+        const posts = parseRssXml(xmlText, limit);
+        if (posts && posts.length > 0) {
+          return posts;
+        }
+      }
+    }
+  } catch {
+    // Continue
+  }
+
+  // Method 3: Direct XML fetch via AllOrigins CORS proxy with clean feed URL
+  try {
+    const proxyXmlUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(liveWpFeedUrl)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
 
