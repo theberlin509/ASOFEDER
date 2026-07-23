@@ -515,24 +515,37 @@ async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null>
 }
 
 export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[]> {
-  // 1. Try real-time RSS Feed with cache busting (bypasses SiteGround Anti-Bot + RSS cache)
-  const rssPosts = await fetchRssFeedPosts(limit);
-  if (rssPosts && rssPosts.length > 0) {
-    return rssPosts;
+  // 1. Primary: Server Proxy route directly to WordPress REST API
+  try {
+    const res = await fetch(`/api/wordpress-posts?limit=${limit}`, { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return parseWpPosts(data);
+      }
+    }
+  } catch (err) {
+    console.warn('Server proxy fetch failed, trying direct fallbacks:', err);
   }
 
-  // 2. Try REST API
+  // 2. Direct REST API fallback
   const restPosts = await fetchRestApiPosts(limit);
-  if (restPosts && restPosts.length > 0) {
+  if (restPosts !== null) {
     return restPosts;
   }
 
-  // 3. Try WPGraphQL
+  // 3. RSS Feed fallback
+  const rssPosts = await fetchRssFeedPosts(limit);
+  if (rssPosts !== null) {
+    return rssPosts;
+  }
+
+  // 4. WPGraphQL fallback
   const gqlPosts = await fetchGraphQLPosts(limit);
-  if (gqlPosts && gqlPosts.length > 0) {
+  if (gqlPosts !== null) {
     return gqlPosts;
   }
 
-  // 4. Fallback to local default posts if all external methods fail
+  // 5. Hard fallback ONLY if network is completely down
   return FALLBACK_BLOG_POSTS;
 }
