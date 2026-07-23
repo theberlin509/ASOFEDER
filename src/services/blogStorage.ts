@@ -5,6 +5,7 @@ import cleanWaterImg from '../assets/images/asofeder_clean_water_1784664221013.j
 import heroImg from '../assets/images/hero_asofeder_women_1784664187658.jpg';
 
 const STORAGE_KEY = 'asofeder_crm_posts_v1';
+const DELETED_KEY = 'asofeder_crm_deleted_ids_v1';
 const SESSION_KEY = 'asofeder_admin_session_v1';
 
 export interface AdminUser {
@@ -70,6 +71,34 @@ export const INITIAL_BLOG_POSTS: BlogPost[] = [
   }
 ];
 
+// --- DELETED POSTS TRACKING ---
+
+export function getDeletedPostIds(): string[] {
+  try {
+    const data = localStorage.getItem(DELETED_KEY);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    }
+  } catch (e) {
+    console.error('Error reading deleted post IDs:', e);
+  }
+  return [];
+}
+
+export function markPostAsDeleted(id: string | number): void {
+  try {
+    const stringId = String(id);
+    const deleted = getDeletedPostIds();
+    if (!deleted.includes(stringId)) {
+      deleted.push(stringId);
+      localStorage.setItem(DELETED_KEY, JSON.stringify(deleted));
+    }
+  } catch (e) {
+    console.error('Error saving deleted post ID:', e);
+  }
+}
+
 // --- AUTHENTICATION FUNCTIONS ---
 
 export function loginAdmin(usernameInput: string, passwordInput: string): AdminUser | null {
@@ -114,26 +143,30 @@ export function logoutAdmin(): void {
 // --- BLOG POSTS STORAGE FUNCTIONS ---
 
 export function getStoredBlogPosts(): BlogPost[] {
+  const deletedIds = getDeletedPostIds();
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    if (data) {
+    if (data !== null) {
       const parsed = JSON.parse(data);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      if (Array.isArray(parsed)) {
+        return parsed.filter(p => !deletedIds.includes(String(p.id)));
       }
     }
   } catch (e) {
     console.error('Error loading stored blog posts:', e);
   }
 
-  // Initialize if empty or error
-  saveAllBlogPosts(INITIAL_BLOG_POSTS);
-  return INITIAL_BLOG_POSTS;
+  // Initialize if never stored before
+  const filteredInit = INITIAL_BLOG_POSTS.filter(p => !deletedIds.includes(String(p.id)));
+  saveAllBlogPosts(filteredInit);
+  return filteredInit;
 }
 
 export function saveAllBlogPosts(posts: BlogPost[]): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(posts));
+    const deletedIds = getDeletedPostIds();
+    const cleanPosts = posts.filter(p => !deletedIds.includes(String(p.id)));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanPosts));
   } catch (e) {
     console.error('Error saving blog posts to localStorage:', e);
   }
@@ -194,16 +227,19 @@ export function createOrUpdateBlogPost(postData: {
 }
 
 export function deleteStoredBlogPost(id: string | number): boolean {
+  markPostAsDeleted(id);
   const currentPosts = getStoredBlogPosts();
   const filtered = currentPosts.filter(p => String(p.id) !== String(id));
-  if (filtered.length !== currentPosts.length) {
-    saveAllBlogPosts(filtered);
-    return true;
-  }
-  return false;
+  saveAllBlogPosts(filtered);
+  return true;
 }
 
 export function resetStoredBlogPosts(): BlogPost[] {
+  try {
+    localStorage.removeItem(DELETED_KEY);
+  } catch (e) {
+    console.error('Error clearing deleted IDs:', e);
+  }
   saveAllBlogPosts(INITIAL_BLOG_POSTS);
   return INITIAL_BLOG_POSTS;
 }

@@ -519,10 +519,5 @@ import { getStoredBlogPosts } from './blogStorage';
 export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[]> {
   // Always return stored CRM posts first to guarantee instant updates, deletions, and additions
   const storedPosts = getStoredBlogPosts();
-  if (storedPosts && storedPosts.length > 0) {
-    return storedPosts.slice(0, limit);
-  }
-
-  // Fallback if empty
-  return FALLBACK_BLOG_POSTS.slice(0, limit);
+  return storedPosts.slice(0, limit);
 }
