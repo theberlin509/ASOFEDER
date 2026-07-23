@@ -6,6 +6,7 @@ import heroImg from '../assets/images/hero_asofeder_women_1784664187658.jpg';
 import { FALLBACK_BLOG_POSTS } from '../data/content';
 
 export const WP_API_URL = 'https://crm.asofeder.org/wp-json/wp/v2/posts?_embed';
+export const GRAPHQL_API_URL = 'https://crm.asofeder.org/graphql';
 
 const FALLBACK_IMAGES = [treeImg, musoImg, cleanWaterImg, heroImg];
 
@@ -55,10 +56,117 @@ function mapCategory(termName: string, titleAndExcerpt: string, index: number): 
   return defaults[index % defaults.length];
 }
 
+/**
+ * Attempt fetching via WPGraphQL first if installed on crm.asofeder.org
+ */
+async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null> {
+  const query = `
+    query GetPosts($first: Int) {
+      posts(first: $first, where: { orderby: { field: DATE, order: DESC } }) {
+        nodes {
+          databaseId
+          id
+          title
+          excerpt
+          content
+          date
+          link
+          author {
+            node {
+              name
+            }
+          }
+          categories {
+            nodes {
+              name
+            }
+          }
+          featuredImage {
+            node {
+              sourceUrl
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const res = await fetch(GRAPHQL_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        query,
+        variables: { first: limit }
+      })
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json.data?.posts?.nodes) return null;
+
+    const nodes = json.data.posts.nodes;
+    return nodes.map((node: any, index: number) => {
+      let imageUrl = node.featuredImage?.node?.sourceUrl;
+
+      if (!imageUrl || typeof imageUrl !== 'string') {
+        const combinedHtml = (node.content || '') + ' ' + (node.excerpt || '');
+        const imgMatch = combinedHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
+        if (imgMatch && imgMatch[1]) {
+          imageUrl = imgMatch[1];
+        }
+      }
+
+      if (imageUrl && imageUrl.startsWith('/wp-content')) {
+        imageUrl = `https://crm.asofeder.org${imageUrl}`;
+      }
+      if (imageUrl && imageUrl.startsWith('http:')) {
+        imageUrl = imageUrl.replace('http:', 'https:');
+      }
+
+      if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.length < 10) {
+        imageUrl = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+      }
+
+      const rawTitle = node.title || 'Article ASOFEDER';
+      const cleanTitle = decodeHtmlEntities(rawTitle);
+      const rawExcerpt = node.excerpt || '';
+      const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(rawExcerpt));
+
+      const categoryName = node.categories?.nodes?.[0]?.name 
+        ? decodeHtmlEntities(node.categories.nodes[0].name)
+        : mapCategory('', cleanTitle + ' ' + cleanExcerpt, index);
+
+      const postDate = node.date ? new Date(node.date) : new Date();
+      const formattedDate = postDate.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+
+      return {
+        id: node.databaseId || node.id,
+        title: cleanTitle,
+        excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur le terrain...',
+        content: node.content || '',
+        imageUrl,
+        date: formattedDate,
+        author: node.author?.node?.name || 'Direction ASOFEDER',
+        category: categoryName,
+        link: node.link
+      };
+    });
+  } catch {
+    return null;
+  }
+}
+
 function extractImageUrl(item: any, index: number): string {
   const wpDomain = 'https://crm.asofeder.org';
 
-  // 1. Check all embedded media sizes and fields from WordPress REST API
   const featuredMedia = item._embedded?.['wp:featuredmedia']?.[0];
   let urlCandidate =
     featuredMedia?.source_url ||
@@ -73,7 +181,6 @@ function extractImageUrl(item: any, index: number): string {
     item.better_featured_image?.source_url ||
     item.featured_image_url;
 
-  // 2. If no featured media found, search for first <img> tag in post content or excerpt
   if (!urlCandidate || typeof urlCandidate !== 'string') {
     const combinedHtml = (item.content?.rendered || '') + ' ' + (item.excerpt?.rendered || '');
     const imgMatch = combinedHtml.match(/<img[^>]+src=["']([^"']+)["']/i);
@@ -82,16 +189,13 @@ function extractImageUrl(item: any, index: number): string {
     }
   }
 
-  // 3. Process and sanitize candidate URL
   if (urlCandidate && typeof urlCandidate === 'string') {
     let cleanUrl = urlCandidate.trim().replace(/&amp;/g, '&');
 
-    // Fix relative WP URLs
     if (cleanUrl.startsWith('/wp-content')) {
       cleanUrl = `${wpDomain}${cleanUrl}`;
     }
 
-    // Upgrade HTTP to HTTPS
     if (cleanUrl.startsWith('http:')) {
       cleanUrl = cleanUrl.replace('http:', 'https:');
     }
@@ -101,7 +205,6 @@ function extractImageUrl(item: any, index: number): string {
     }
   }
 
-  // 4. Fallback asset only if no image exists anywhere in WP post
   return FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
 }
 
@@ -134,7 +237,7 @@ function parseWpPosts(data: any[]): BlogPost[] {
     return {
       id: item.id,
       title: cleanTitle,
-      excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur the terrain...',
+      excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur le terrain...',
       content: item.content?.rendered || '',
       imageUrl,
       date: formattedDate,
@@ -166,6 +269,13 @@ async function fetchWithTimeout(url: string, timeoutMs: number = 4000): Promise<
 }
 
 export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[]> {
+  // 1. First try WPGraphQL endpoint
+  const gqlPosts = await fetchGraphQLPosts(limit);
+  if (gqlPosts && gqlPosts.length > 0) {
+    return gqlPosts;
+  }
+
+  // 2. Otherwise try REST API with CORS proxy
   const timestamp = Date.now();
   const targetUrl = `${WP_API_URL}&per_page=${limit}&_t=${timestamp}`;
 
@@ -190,8 +300,8 @@ export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[
       if (Array.isArray(data)) {
         return parseWpPosts(data);
       }
-    } catch (err) {
-      console.warn(`Fetch attempt failed for ${url}:`, err);
+    } catch {
+      // Continue to next
     }
   }
 
