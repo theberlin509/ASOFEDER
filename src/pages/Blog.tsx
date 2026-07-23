@@ -3,8 +3,9 @@ import { PageId, Language, BlogPost } from '../types';
 import { uiTranslations } from '../data/translations';
 import { FALLBACK_BLOG_POSTS } from '../data/content';
 import { fetchWordPressPosts } from '../services/wordpress';
+import { CrmAdminModal } from '../components/CrmAdminModal';
 import treeImg from '../assets/images/asofeder_tree_nursery_1784664209449.jpg';
-import { Calendar, Clock, ArrowRight, ArrowUpRight, User, Tag, ChevronRight, X, Heart, Bookmark, Share2, CheckCircle2, Newspaper, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, ArrowRight, ArrowUpRight, User, Tag, ChevronRight, X, Heart, Bookmark, Share2, CheckCircle2, Newspaper, RefreshCw, ShieldCheck } from 'lucide-react';
 
 interface BlogProps {
   onNavigate: (page: PageId) => void;
@@ -18,6 +19,7 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
   const [activeCategory, setActiveCategory] = useState<string>('Tous');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [isCrmOpen, setIsCrmOpen] = useState<boolean>(false);
 
   const loadPosts = async () => {
     setIsLoading(true);
@@ -93,17 +95,26 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={() => setIsCrmOpen(true)}
+                title="Accéder à l'espace Admin CRM (Justilien / PRL)"
+                className="px-4 py-2 rounded-full text-xs font-bold bg-[#005021] hover:bg-[#003816] text-amber-300 border border-emerald-700 flex items-center gap-2 transition shadow-xs cursor-pointer active:scale-95"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-300" />
+                <span>Espace Admin (CRM)</span>
+              </button>
+              <button
+                type="button"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   loadPosts();
                 }}
                 disabled={isLoading}
-                title="Actualiser les articles en direct depuis WordPress"
+                title="Actualiser la liste des articles"
                 className="px-4 py-2 rounded-full text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 flex items-center gap-2 transition shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-[#006b2d]' : 'text-amber-800'}`} />
-                <span>{isLoading ? 'Mise à jour...' : 'Actualiser en direct'}</span>
+                <span>{isLoading ? 'Mise à jour...' : 'Actualiser'}</span>
               </button>
               {categories.map((cat) => (
                 <button
@@ -333,6 +344,13 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
           </div>
         </div>
       </section>
+
+      {/* CRM ADMIN MODAL */}
+      <CrmAdminModal
+        isOpen={isCrmOpen}
+        onClose={() => setIsCrmOpen(false)}
+        onPostsUpdated={loadPosts}
+      />
 
     </div>
   );

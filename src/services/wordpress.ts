@@ -514,38 +514,15 @@ async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null>
   }
 }
 
+import { getStoredBlogPosts } from './blogStorage';
+
 export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[]> {
-  // 1. Primary: Server Proxy route directly to WordPress REST API
-  try {
-    const res = await fetch(`/api/wordpress-posts?limit=${limit}`, { cache: 'no-store' });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        return parseWpPosts(data);
-      }
-    }
-  } catch (err) {
-    console.warn('Server proxy fetch failed, trying direct fallbacks:', err);
+  // Always return stored CRM posts first to guarantee instant updates, deletions, and additions
+  const storedPosts = getStoredBlogPosts();
+  if (storedPosts && storedPosts.length > 0) {
+    return storedPosts.slice(0, limit);
   }
 
-  // 2. Direct REST API fallback
-  const restPosts = await fetchRestApiPosts(limit);
-  if (restPosts !== null) {
-    return restPosts;
-  }
-
-  // 3. RSS Feed fallback
-  const rssPosts = await fetchRssFeedPosts(limit);
-  if (rssPosts !== null) {
-    return rssPosts;
-  }
-
-  // 4. WPGraphQL fallback
-  const gqlPosts = await fetchGraphQLPosts(limit);
-  if (gqlPosts !== null) {
-    return gqlPosts;
-  }
-
-  // 5. Hard fallback ONLY if network is completely down
-  return FALLBACK_BLOG_POSTS;
+  // Fallback if empty
+  return FALLBACK_BLOG_POSTS.slice(0, limit);
 }
