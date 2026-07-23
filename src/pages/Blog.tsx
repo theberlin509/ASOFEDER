@@ -4,7 +4,7 @@ import { uiTranslations } from '../data/translations';
 import { FALLBACK_BLOG_POSTS } from '../data/content';
 import { fetchWordPressPosts } from '../services/wordpress';
 import treeImg from '../assets/images/asofeder_tree_nursery_1784664209449.jpg';
-import { Calendar, Clock, ArrowRight, ArrowUpRight, User, Tag, ChevronRight, X, Heart, Bookmark, Share2, CheckCircle2, Newspaper } from 'lucide-react';
+import { Calendar, Clock, ArrowRight, ArrowUpRight, User, Tag, ChevronRight, X, Heart, Bookmark, Share2, CheckCircle2, Newspaper, RefreshCw } from 'lucide-react';
 
 interface BlogProps {
   onNavigate: (page: PageId) => void;
@@ -16,17 +16,19 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
   const [posts, setPosts] = useState<BlogPost[]>(FALLBACK_BLOG_POSTS);
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('Tous');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const loadPosts = async () => {
+    setIsLoading(true);
+    const fetched = await fetchWordPressPosts(12);
+    if (fetched && fetched.length > 0) {
+      setPosts(fetched);
+    }
+    setIsLoading(false);
+  };
 
   useEffect(() => {
-    let isMounted = true;
-    const loadPosts = async () => {
-      const fetched = await fetchWordPressPosts(12);
-      if (isMounted && fetched && fetched.length > 0) {
-        setPosts(fetched);
-      }
-    };
     loadPosts();
-    return () => { isMounted = false; };
   }, []);
 
   const handleImgError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
@@ -62,8 +64,17 @@ export const Blog: React.FC<BlogProps> = ({ onNavigate, currentLang }) => {
             </p>
           </div>
 
-          {/* Category Filter Pills */}
-          <div className="flex flex-wrap gap-2">
+          {/* Category Filter Pills & Refresh Button */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={loadPosts}
+              disabled={isLoading}
+              title="Actualiser les articles en direct depuis WordPress"
+              className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1.5 transition shadow-2xs cursor-pointer active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-[#006b2d]' : 'text-amber-800'}`} />
+              <span>{isLoading ? 'Mise à jour...' : 'Actualiser en direct'}</span>
+            </button>
             {categories.map((cat) => (
               <button
                 key={cat}

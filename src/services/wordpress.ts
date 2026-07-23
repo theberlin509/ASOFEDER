@@ -57,36 +57,46 @@ function mapCategory(termName: string, titleAndExcerpt: string, index: number): 
 }
 
 /**
- * Fetch articles via WordPress RSS Feed (bypasses SiteGround Anti-Bot blocking)
+ * Parse raw RSS XML string using browser DOMParser
  */
-async function fetchRssFeedPosts(limit: number = 12): Promise<BlogPost[] | null> {
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(WP_RSS_FEED_URL)}&_t=${Date.now()}`;
-
+function parseRssXml(xmlText: string, limit: number): BlogPost[] | null {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+    const itemNodes = Array.from(xmlDoc.querySelectorAll('item')).slice(0, limit);
 
-    const res = await fetch(apiUrl, { signal: controller.signal });
-    clearTimeout(timer);
+    if (itemNodes.length === 0) return null;
 
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.status !== 'ok' || !Array.isArray(json.items) || json.items.length === 0) {
-      return null;
-    }
+    return itemNodes.map((item, index) => {
+      const title = item.querySelector('title')?.textContent || 'Article ASOFEDER';
+      const link = item.querySelector('link')?.textContent || '';
+      const pubDateStr = item.querySelector('pubDate')?.textContent || '';
+      
+      let creator = 'Direction ASOFEDER';
+      const dcCreator = item.getElementsByTagNameNS('*', 'creator')[0] || item.querySelector('dc\\:creator');
+      if (dcCreator?.textContent) {
+        creator = dcCreator.textContent;
+      }
 
-    const items = json.items.slice(0, limit);
-    return items.map((item: any, index: number) => {
-      const rawTitle = item.title || 'Article ASOFEDER';
-      const cleanTitle = decodeHtmlEntities(rawTitle);
+      const categories = Array.from(item.querySelectorAll('category')).map(c => c.textContent || '');
+      const termName = categories.length > 0 ? categories[0] : '';
 
-      const rawContent = item.content || item.description || '';
-      const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(item.description || rawContent));
+      const contentEncodedNode = item.getElementsByTagNameNS('*', 'encoded')[0];
+      const contentEncoded = contentEncodedNode?.textContent || '';
+      const description = item.querySelector('description')?.textContent || '';
+      const fullContent = contentEncoded || description;
 
-      // Extract image from thumbnail, enclosure or content body
-      let imageUrl = item.thumbnail || item.enclosure?.link;
-      if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.length < 5) {
-        const imgMatch = rawContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+      const cleanTitle = decodeHtmlEntities(title);
+      const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(description || contentEncoded));
+
+      let imageUrl = '';
+      const mediaContent = item.getElementsByTagNameNS('*', 'content')[0] || item.querySelector('enclosure');
+      if (mediaContent) {
+        imageUrl = mediaContent.getAttribute('url') || '';
+      }
+
+      if (!imageUrl || imageUrl.length < 5) {
+        const imgMatch = fullContent.match(/<img[^>]+src=["']([^"']+)["']/i);
         if (imgMatch && imgMatch[1]) {
           imageUrl = imgMatch[1];
         }
@@ -103,10 +113,9 @@ async function fetchRssFeedPosts(limit: number = 12): Promise<BlogPost[] | null>
         imageUrl = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
       }
 
-      const termName = item.categories && item.categories.length > 0 ? item.categories[0] : '';
       const categoryName = mapCategory(termName, cleanTitle + ' ' + cleanExcerpt, index);
 
-      const postDate = item.pubDate ? new Date(item.pubDate) : new Date();
+      const postDate = pubDateStr ? new Date(pubDateStr) : new Date();
       const formattedDate = postDate.toLocaleDateString('fr-FR', {
         day: 'numeric',
         month: 'long',
@@ -114,20 +123,125 @@ async function fetchRssFeedPosts(limit: number = 12): Promise<BlogPost[] | null>
       });
 
       return {
-        id: item.guid || item.link || String(index),
+        id: link || item.querySelector('guid')?.textContent || `${index}-${Date.now()}`,
         title: cleanTitle,
         excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur le terrain...',
-        content: item.content || item.description || '',
+        content: fullContent,
         imageUrl,
         date: formattedDate,
-        author: item.author || 'Direction ASOFEDER',
+        author: creator,
         category: categoryName,
-        link: item.link
+        link: link
       };
     });
-  } catch {
+  } catch (err) {
+    console.error('Error parsing RSS XML:', err);
     return null;
   }
+}
+
+/**
+ * Fetch articles via WordPress RSS Feed
+ */
+async function fetchRssFeedPosts(limit: number = 12): Promise<BlogPost[] | null> {
+  const nonce = Date.now();
+
+  // Method 1: Try rss2json with timestamp parameter on the API call
+  try {
+    const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(WP_RSS_FEED_URL)}&_t=${nonce}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(rss2jsonUrl, {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json.status === 'ok' && Array.isArray(json.items) && json.items.length > 0) {
+        const items = json.items.slice(0, limit);
+        return items.map((item: any, index: number) => {
+          const rawTitle = item.title || 'Article ASOFEDER';
+          const cleanTitle = decodeHtmlEntities(rawTitle);
+
+          const rawContent = item.content || item.description || '';
+          const cleanExcerpt = decodeHtmlEntities(stripHtmlTags(item.description || rawContent));
+
+          let imageUrl = item.thumbnail || item.enclosure?.link;
+          if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.length < 5) {
+            const imgMatch = rawContent.match(/<img[^>]+src=["']([^"']+)["']/i);
+            if (imgMatch && imgMatch[1]) {
+              imageUrl = imgMatch[1];
+            }
+          }
+
+          if (imageUrl && imageUrl.startsWith('/wp-content')) {
+            imageUrl = `https://crm.asofeder.org${imageUrl}`;
+          }
+          if (imageUrl && imageUrl.startsWith('http:')) {
+            imageUrl = imageUrl.replace('http:', 'https:');
+          }
+
+          if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.length < 10) {
+            imageUrl = FALLBACK_IMAGES[index % FALLBACK_IMAGES.length];
+          }
+
+          const termName = item.categories && item.categories.length > 0 ? item.categories[0] : '';
+          const categoryName = mapCategory(termName, cleanTitle + ' ' + cleanExcerpt, index);
+
+          const postDate = item.pubDate ? new Date(item.pubDate) : new Date();
+          const formattedDate = postDate.toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+          });
+
+          return {
+            id: item.guid || item.link || String(index),
+            title: cleanTitle,
+            excerpt: cleanExcerpt ? (cleanExcerpt.length > 180 ? cleanExcerpt.slice(0, 180) + '...' : cleanExcerpt) : 'Découvrez les détails de cette initiative sur le terrain...',
+            content: rawContent,
+            imageUrl,
+            date: formattedDate,
+            author: item.author || 'Direction ASOFEDER',
+            category: categoryName,
+            link: item.link
+          };
+        });
+      }
+    }
+  } catch {
+    // Continue
+  }
+
+  // Method 2: Direct XML fetch via AllOrigins CORS proxy with clean feed URL
+  try {
+    const proxyXmlUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(WP_RSS_FEED_URL)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(proxyXmlUrl, {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (res.ok) {
+      const xmlText = await res.text();
+      if (xmlText.includes('<item>')) {
+        const posts = parseRssXml(xmlText, limit);
+        if (posts && posts.length > 0) {
+          return posts;
+        }
+      }
+    }
+  } catch {
+    // Fallback
+  }
+
+  return null;
 }
 
 function extractImageUrl(item: any, index: number): string {
@@ -218,8 +332,8 @@ function parseWpPosts(data: any[]): BlogPost[] {
  * Fetch via WordPress REST API
  */
 async function fetchRestApiPosts(limit: number = 12): Promise<BlogPost[] | null> {
-  const timestamp = Date.now();
-  const directUrl = `${WP_API_URL}&per_page=${limit}&_t=${timestamp}`;
+  const nonce = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const directUrl = `${WP_API_URL}&per_page=${limit}&_t=${nonce}`;
 
   const urlsToTry = [
     directUrl,
@@ -231,7 +345,11 @@ async function fetchRestApiPosts(limit: number = 12): Promise<BlogPost[] | null>
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 4000);
 
-      const res = await fetch(url, { signal: controller.signal });
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+        signal: controller.signal
+      });
       clearTimeout(timer);
 
       if (!res.ok) continue;
@@ -294,7 +412,11 @@ async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null>
 
     const res = await fetch(GRAPHQL_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      },
+      cache: 'no-store',
       body: JSON.stringify({
         query,
         variables: { first: limit }
@@ -366,7 +488,7 @@ async function fetchGraphQLPosts(limit: number = 12): Promise<BlogPost[] | null>
 }
 
 export async function fetchWordPressPosts(limit: number = 12): Promise<BlogPost[]> {
-  // 1. First try RSS Feed via rss2json (Bypasses SiteGround Anti-Bot completely)
+  // 1. Try real-time RSS Feed with cache busting (bypasses SiteGround Anti-Bot + RSS cache)
   const rssPosts = await fetchRssFeedPosts(limit);
   if (rssPosts && rssPosts.length > 0) {
     return rssPosts;
